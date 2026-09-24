@@ -1,0 +1,403 @@
+const express = require('express');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+const router = express.Router();
+
+// Direct API Key injection as requested
+const API_KEY = "AQ.Ab8RN6IUnzfNwRXKAKqyuDNJRWsXxRdzNyHs-P-ePaYIb5PGWA";
+const genAI = new GoogleGenerativeAI(API_KEY);
+
+router.post('/', async (req, res) => {
+  try {
+    const { message, history } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    // Using gemini-2.5-flash strictly
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    // Format chat history for the SDK
+    const formattedHistory = (history || []).map(item => ({
+      role: item.role === 'user' ? 'user' : 'model',
+      parts: [{ text: item.content }]
+    }));
+
+    const chat = model.startChat({
+      history: formattedHistory,
+      systemInstruction: "You are verbal-ai, an intelligent, elegant, and highly articulate assistant. Provide answers with rich formatting using Markdown tables for tabular data and KaTeX LaTeX delimiters ($...$ for inline, $$...$$ for block) for mathematical formulas when applicable."
+    });
+
+    const result = await chat.sendMessage(message);
+    const responseText = result.response.text();
+
+    return res.status(200).json({ response: responseText });
+  } catch (error) {
+    console.error("API Error:", error);
+    return res.status(500).json({ 
+      error: "An internal server error occurred while processing your request." 
+    });
+  }
+});
+
+module.exports = router;
+  <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>verbal-ai</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- KaTeX CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+
+  <!-- Marked.js for Markdown Parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  
+  <!-- KaTeX JS -->
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+
+  <style>
+    :root {
+      --bg-primary: #0a0c10;
+      --bg-surface: #12161f;
+      --bg-card: #1a202c;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --border: rgba(255, 255, 255, 0.08);
+      --glass: rgba(18, 22, 31, 0.75);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Header */
+    header {
+      background: var(--glass);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 10;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .brand h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    /* Chat Container */
+    #chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      max-width: 900px;
+      width: 100%;
+      margin: 0 auto;
+      scroll-behavior: smooth;
+    }
+
+    .message {
+      display: flex;
+      gap: 1rem;
+      animation: fadeIn 0.3s ease-out forwards;
+      max-width: 85%;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .message.assistant {
+      align-self: flex-start;
+    }
+
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .user .avatar {
+      background: #3b82f6;
+      color: #fff;
+    }
+
+    .assistant .avatar {
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      color: #fff;
+    }
+
+    .bubble {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      padding: 1rem 1.25rem;
+      border-radius: 16px;
+      line-height: 1.6;
+      font-size: 0.95rem;
+    }
+
+    .user .bubble {
+      background: var(--accent);
+      border-color: transparent;
+      border-top-right-radius: 4px;
+    }
+
+    .assistant .bubble {
+      border-top-left-radius: 4px;
+      width: 100%;
+    }
+
+    /* Markdown Styling Inside Messages */
+    .bubble p {
+      margin-bottom: 0.75rem;
+    }
+
+    .bubble p:last-child {
+      margin-bottom: 0;
+    }
+
+    /* Beautiful Tables */
+    .bubble table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .bubble th, .bubble td {
+      padding: 0.75rem 1rem;
+      text-align: left;
+    }
+
+    .bubble th {
+      background: rgba(255, 255, 255, 0.05);
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .bubble td {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    }
+
+    .bubble tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* Input Container */
+    .input-wrapper {
+      padding: 1.5rem 2rem;
+      background: var(--glass);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+    }
+
+    .input-box {
+      max-width: 900px;
+      margin: 0 auto;
+      display: flex;
+      gap: 0.75rem;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.5rem 0.75rem;
+      transition: border-color 0.2s;
+    }
+
+    .input-box:focus-within {
+      border-color: var(--accent);
+    }
+
+    textarea {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.95rem;
+      resize: none;
+      max-height: 120px;
+      padding: 0.5rem;
+    }
+
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 0 1.25rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: var(--accent-hover);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">V</div>
+      <h1>verbal-ai</h1>
+    </div>
+  </header>
+
+  <main id="chat-container">
+    <div class="message assistant">
+      <div class="avatar">V</div>
+      <div class="bubble">
+        Hello! How can I assist you today?
+      </div>
+    </div>
+  </main>
+
+  <div class="input-wrapper">
+    <div class="input-box">
+      <textarea id="user-input" rows="1" placeholder="Type a message..."></textarea>
+      <button id="send-btn">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const chatContainer = document.getElementById('chat-container');
+    const userInput = document.getElementById('user-input');
+    const sendBtn = document.getElementById('send-btn');
+    let chatHistory = [];
+
+    // Auto-resize textarea
+    userInput.addEventListener('input', () => {
+      userInput.style.height = 'auto';
+      userInput.style.height = userInput.scrollHeight + 'px';
+    });
+
+    function appendMessage(role, text) {
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `message ${role}`;
+
+      const avatarDiv = document.createElement('div');
+      avatarDiv.className = 'avatar';
+      avatarDiv.textContent = role === 'user' ? 'U' : 'V';
+
+      const bubbleDiv = document.createElement('div');
+      bubbleDiv.className = 'bubble';
+      
+      // Parse Markdown
+      bubbleDiv.innerHTML = marked.parse(text);
+
+      msgDiv.appendChild(avatarDiv);
+      msgDiv.appendChild(bubbleDiv);
+      chatContainer.appendChild(msgDiv);
+
+      // Render KaTeX Formulas
+      renderMathInElement(bubbleDiv, {
+        delimiters: [
+          {left: '$$', right: '$$', display: true},
+          {left: '$', right: '$', display: false}
+        ],
+        throwOnError: false
+      });
+
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const text = userInput.value.trim();
+      if (!text) return;
+
+      appendMessage('user', text);
+      userInput.value = '';
+      userInput.style.height = 'auto';
+
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, history: chatHistory })
+        });
+
+        const data = await response.json();
+        
+        if (data.response) {
+          appendMessage('assistant', data.response);
+          chatHistory.push({ role: 'user', content: text });
+          chatHistory.push({ role: 'assistant', content: data.response });
+        } else {
+          appendMessage('assistant', 'Sorry, I received an unexpected error.');
+        }
+      } catch (err) {
+        appendMessage('assistant', 'Unable to reach the server. Please try again.');
+      }
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    userInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  </script>
+</body>
+</html>
